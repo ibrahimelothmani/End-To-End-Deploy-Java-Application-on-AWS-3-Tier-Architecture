@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as random from "@pulumi/random";
 
 // Load Stack Configurations
 const config = new pulumi.Config();
@@ -177,7 +178,7 @@ const dbSecret = new aws.secretsmanager.Secret("db-secret", {
     recoveryWindowInDays: 0, // Quick deletion allowed for testing stacks
 });
 
-const dbPassword = new aws.random.RandomPassword("db-pwd", {
+const dbPassword = new random.RandomPassword("db-pwd", {
     length: 16,
     special: false, // Ensure no shell-escaping issues in JDBC connections
 });
@@ -202,7 +203,7 @@ const dbSubnetGroup = new aws.rds.SubnetGroup("rds-subnet-grp", {
 });
 
 // Database Master credentials helper variables
-const secretCredentials = dbSecretValue.secretString.apply(val => JSON.parse(val));
+const secretCredentials = dbSecretValue.secretString.apply(val => JSON.parse(val ?? "{}"));
 
 const rdsInstance = new aws.rds.Instance("db-mysql", {
     engine: "mysql",
@@ -211,8 +212,8 @@ const rdsInstance = new aws.rds.Instance("db-mysql", {
     allocatedStorage: 20,
     storageType: "gp3",
     dbName: "UserDB",
-    username: secretCredentials.username,
-    password: secretCredentials.password,
+    username: secretCredentials.apply(creds => creds.username),
+    password: secretCredentials.apply(creds => creds.password),
     dbSubnetGroupName: dbSubnetGroup.name,
     vpcSecurityGroupIds: [rdsSg.id],
     multiAz: !costOptimized, // Enable Multi-AZ HA in Production, disable for cost-saving Dev
@@ -404,8 +405,9 @@ const ecsService = new aws.ecs.Service("app-service", {
         containerName: "tomcat-app",
         containerPort: 8080,
     }],
-    dependsOn: [albListener], // Ensure Target Group routes are stable before starting
     tags: { Name: "java-3tier-service" },
+}, {
+    dependsOn: [albListener], // Ensure Target Group routes are stable before starting
 });
 
 // ==========================================
