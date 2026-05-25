@@ -1,0 +1,111 @@
+name: End-to-End Deploy Java Application on AWS 3-Tier Architecture
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+   id-token: write
+   contents: read
+
+jobs:
+  check-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check branch name
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "This workflow can only be triggered by the main branch."
+            exit 1
+          fi
+        
+  build-java-app:
+    runs-on: ubuntu-latest
+    needs: check-branch
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Building application
+        run:
+          mvn clean package -DskipTests
+  
+  check-code-quality-with-sonarqube:
+    runs-on: ubuntu-latest
+    needs: build-java-app
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Sonarqube Scan
+        run:
+          mvn clean verify sonar:sonar \
+            -Dsonar.host.url=${{ secrets.SONAR_URL }}
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+            -Dsonar.exclusions="**/src/test/**"
+  
+  dockerize-the-app:
+    runs-on: ubuntu-latest
+    needs: check-code-quality-with-sonarqube
+    steps:
+      - name: Dockerize application
+        uses: actions/checkout@v4
+
+      - name: Docker Build
+        run: docker build -t java-app .
+
+      - name: docker login
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }}
+          -p ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: push the docker image to Docker Hub
+        run: docker push java-app:latest
+
+  scan-the-image-with-trivy:
+    runs-on: ubuntu-latest
+    needs: dockerize-the-app
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: install trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y trivy
+      - name: Trivy Scan
+        run: |
+          trivy image java-app:latest
+  
+  push-the-image-to-aws-ecr:
+    runs-on: ubuntu-latest
+    needs: dockerize-the-app
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with: 
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }} 
+      - name: Login to AWS ECR
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+      - name: Create AWS ECR Repository
+        run: |
+          aws ecr create-repository \
+            --repository-name java-app \
+            --region ${{ secrets.AWS_REGION }}
+      - name: Push Image to AWS ECR 
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          docker build -t java-app .
+          docker tag java-app:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/java-app:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/java-app:latest
+
+          
+    
+      
+      
