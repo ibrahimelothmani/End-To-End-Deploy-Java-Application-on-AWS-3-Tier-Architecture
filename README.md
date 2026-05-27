@@ -1,221 +1,233 @@
-# E2E Deploy Java Application on AWS 3-Tier Architecture
+# ☕ End-to-End Java Application Deployment with Modern DevSecOps & Kubernetes Orchestration
 
-Welcome to the **End-to-End Java Application Deployment on AWS 3-Tier Architecture** repository. This project demonstrates how to deploy, secure, scale, and manage a legacy-style Java Spring Boot web application (packaged as a WAR) using industry-standard DevOps and cloud architecture principles on Amazon Web Services (AWS).
+Welcome to the **End-to-End Java Application Deployment & DevSecOps Platform** repository. This project demonstrates the transition of a legacy-style Java Spring Boot application (packaged as a WAR) from manual deployment to a containerized, orchestrated, secure, and monitored cloud environment using modern DevSecOps standards.
 
 ---
 
-## 📸 Architecture Diagrams
+## 🏛️ System Architecture Profile
 
-### 1. Modernized & Optimized AWS 3-Tier Architecture (Proposed)
-Below is the newly designed, highly secure, serverless-compute, and optimized architecture. It leverages managed container services (**AWS Fargate**), enterprise-grade edge caching and web security (**Amazon CloudFront + AWS WAF**), centralized caching (**Amazon ElastiCache Redis**), and advanced key management and secrets scanning (**AWS Secrets Manager + KMS**).
+Below is the white-background architectural design illustrating the DevOps workflow, network routing segmentation, containerization, and data tier integrations:
 
-![Modernized AWS 3-Tier Architecture](./new_architecture.png)
+![Modernized Architecture Workflow](./new_architecture.png)
 
-### 2. Traditional AWS 3-Tier Architecture (Existing)
-Below is the traditional multi-VPC, EC2-hosted infrastructure layout containing transit routing, bastion hosts, and custom Nginx reverse proxies.
-
-![Traditional AWS 3-Tier Architecture](./architecture.png)
+### Key Architectural Pillars:
+1. **DevOps Pipeline Automation:** Direct CI/CD integration triggered by code push, incorporating security scanning (Trivy), automated Maven compiles, and multi-tagged ECR image delivery.
+2. **Network Routing Segmentation:** Explicit **Public Route Tables** (directing public subnets to the Internet Gateway) and **Private Route Tables** (routing application and data subnets securely through NAT Gateways).
+3. **Multi-AZ Application Reliability:** Replicating container tasks across private subnets spanning multiple Availability Zones behind an Elastic Application Load Balancer.
+4. **Hardened Data Tier:** Amazon RDS MySQL Multi-AZ and ElastiCache Redis deployments locked within isolated, non-routable subnets.
 
 ---
 
 ## ☕ Java Application Profile & Security Audit
 
-The application included under `/Java-App` is a Spring Boot web application packaged as a Web Application Archive (`WAR`), designed to run inside an **Apache Tomcat** servlet container.
+The core application inside `/Java-App` is a standard Spring Boot MVC web application packaged as a Web Application Archive (`WAR`) file, designed to execute inside an **Apache Tomcat** servlet container.
 
 ### Core Stack
-*   **Language & Runtime:** Java 1.8 (Java 8)
-*   **Web Framework:** Spring Boot Web Starter (v2.2.4.RELEASE)
-*   **View Technology:** JavaServer Pages (JSP) compiling via `tomcat-jasper`
-*   **Database Driver:** MySQL Connector Java for relational storage
-*   **Build System:** Maven (`pom.xml`) with distribution integration targeting JFrog Artifactory
+* **Runtime:** JRE / JDK 1.8 (Java 8)
+* **Framework:** Spring Boot Starter Web (v2.2.4.RELEASE)
+* **View Technology:** JavaServer Pages (JSP) compiling via `tomcat-jasper`
+* **Database Driver:** MySQL Connector Java
+* **Build System:** Maven (`pom.xml`)
+
+### 🚨 Crucial Security Vulnerabilities Resolved:
+During early security analysis, two high-risk security flaws were identified and fixed:
+* **Hardcoded Credentials:** Resolved by eliminating plain-text passwords in `application.properties` and refactoring the app to inject parameters (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`) via dynamic container environment variables.
+* **SQL Injection Vulnerability:** Standardized database controllers ([login.java](file:///home/the-green/Desktop/Devops%20Project/End-To-End-Deploy-Java-Application-on-AWS-3-Tier-Architecture/Java-App/src/main/java/com/dpt/demo/login.java) and [register.java](file:///home/the-green/Desktop/Devops%20Project/End-To-End-Deploy-Java-Application-on-AWS-3-Tier-Architecture/Java-App/src/main/java/com/dpt/demo/register.java)) to utilize parameterized **PreparedStatements** instead of raw query string concatenation.
 
 ---
 
-### 🚨 Critical Security Audit & Remediations
+## 🛠️ The DevSecOps Extension Roadmap
 
-During our code review of the Java Application, **two major security vulnerabilities** and a few structural issues were identified. These must be addressed before deploying to a production AWS environment.
+For lightweight applications, a complex AWS 3-tier Fargate setup may introduce unnecessary cloud costs and maintenance overhead. This section documents our transition path to a modular, production-ready **DevSecOps Platform** incorporating modern industry tools.
 
-#### 1. Hardcoded Secrets in Configuration
-*   **Vulnerability:** In [application.properties](file:///home/the-green/Desktop/Devops%20Project/End-To-End-Deploy-Java-Application-on-AWS-3-Tier-Architecture/Java-App/src/main/resources/application.properties), the database host, user, and password are hardcoded in plain text:
-    ```properties
-    spring.datasource.url = jdbc:mysql://ed-web-db.cdgiiabcm6en.us-east-1.rds.amazonaws.com:3306/UserDB
-    spring.datasource.username = admin
-    spring.datasource.password = Admin123
-    ```
-*   **Risk:** Committing these credentials exposes them to anyone with repository access. If leaked, your database can be accessed, corrupted, or ransomed.
-*   **Remediation:** Remove hardcoded credentials. Inject them at runtime using environment variables in the container, backed by **AWS Secrets Manager**:
-    ```properties
-    spring.datasource.url = jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    spring.datasource.username = ${DB_USERNAME}
-    spring.datasource.password = ${DB_PASSWORD}
-    ```
+### 1. Configuration Management with Ansible
+Ansible is introduced to replace manual machine setup with reusable Infrastructure-as-Code (IaC). It standardizes base VMs (e.g. EC2 instance clusters or local servers) by provisioning dependencies, updating patches, and configuring runtime tools.
 
-#### 2. SQL Injection Vulnerability in Data Controllers
-*   **Vulnerability:** Both the [login.java](file:///home/the-green/Desktop/Devops%20Project/End-To-End-Deploy-Java-Application-on-AWS-3-Tier-Architecture/Java-App/src/main/java/com/dpt/demo/login.java#L39-L42) and [register.java](file:///home/the-green/Desktop/Devops%20Project/End-To-End-Deploy-Java-Application-on-AWS-3-Tier-Architecture/Java-App/src/main/java/com/dpt/demo/register.java#L45) controllers utilize raw JDBC `DriverManager` and string concatenation to execute database statements:
-    ```java
-    String query = "select * from Employee where username='" + userName + "' and password='" + password + "'";
-    ```
-*   **Risk:** Attackers can easily bypass authentication or retrieve the entire database content by injecting SQL commands (e.g., entering `' OR '1'='1` in the username field).
-*   **Remediation:** Always use **PreparedStatements** with parameterized queries to sanitize input:
-    ```java
-    String query = "SELECT * FROM Employee WHERE username = ? AND password = ?";
-    try (Connection con = DriverManager.getConnection(url, DBusername, DBpassword);
-         PreparedStatement pst = con.prepareStatement(query)) {
-        pst.setString(1, userName);
-        pst.setString(2, password);
-        try (ResultSet rs = pst.executeQuery()) {
-            if (rs.next()) {
-                userId = rs.getString("username");
-            }
-        }
-    }
-    ```
-
+#### Sample Playbook (`ansible/playbook.yml`):
+```yaml
 ---
+- name: Standardize Tomcat Runner Nodes
+  hosts: app_servers
+  become: yes
+  vars:
+    tomcat_version: 9.0.86
+  tasks:
+    - name: Update apt cache and install Java 8 JRE
+      apt:
+        name: openjdk-8-jre-headless
+        state: present
+        update_cache: yes
 
-## 🏛️ Architectural Evolution: Traditional vs. Modernized
+    - name: Create dedicated Tomcat group
+      group:
+        name: tomcat
+        state: present
 
-### The Existing Traditional Architecture
-The existing architecture (shown in `architecture.png`) is a highly complex setup featuring:
-1.  **Multiple VPCs:** Separated Management VPC, Build VPC, and Production VPC connected via AWS Transit Gateway.
-2.  **Web Tier on EC2:** Self-managed Nginx Web Servers on EC2 instances inside a public subnet.
-3.  **Application Tier on EC2:** Self-managed Spring Boot/Tomcat on EC2 instances running inside Auto Scaling Groups (ASGs).
-4.  **Database Tier:** Amazon RDS MySQL DB in Multi-AZ configuration.
-5.  **Ancillary Services:** Heavy dependency on manual EC2 bastion hosts, NAT gateways, and custom tooling.
+    - name: Create dedicated Tomcat user
+      user:
+        name: tomcat
+        group: tomcat
+        shell: /bin/false
+        home: /opt/tomcat
 
----
+    - name: Download Apache Tomcat
+      get_url:
+        url: "https://archive.apache.org/dist/tomcat/tomcat-9/v{{ tomcat_version }}/bin/apache-tomcat-{{ tomcat_version }}.tar.gz"
+        dest: /tmp/tomcat.tar.gz
 
-### The Proposed Modernized Architecture (The Better Way)
-We redesigned the architecture to decrease operational overhead, harden security, and adopt modern **Serverless Containerization (AWS Fargate)**.
-
-#### 1. Edge Security & Performance
-*   **Amazon Route 53:** Resolves global DNS requests.
-*   **Amazon CloudFront (CDN):** Caches static assets globally, serving as the first line of defense.
-*   **AWS WAF (Web Application Firewall):** Shielding CloudFront and the Load Balancer from L7 web threats (OWASP Top 10, SQL Injections, DDoS attacks).
-
-#### 2. Load Balancing & Network Segmentation
-*   **Single VPC Setup:** Streamlines networking, utilizing clean public, private, and isolated data subnets across two Availability Zones (AZs) for high availability.
-*   **Application Load Balancer (ALB):** Spans public subnets, routing traffic securely via HTTPS (AWS Certificate Manager SSL/TLS certificates) into private app layers.
-
-#### 3. Containerized Serverless Compute (Application Tier)
-*   **Amazon ECS on AWS Fargate:** Eliminates EC2 instance management, OS patching, and host hardening. Fargate scales containers (running the Tomcat WAR) dynamically based on CPU/Memory usage.
-*   **Security Groups:** Strictly configured to only allow inbound HTTP/HTTPS traffic from the ALB.
-
-#### 4. Hardened Data Tier
-*   **Amazon RDS Multi-AZ (MySQL):** Deployed inside isolated data subnets, inaccessible from the public internet. Primary master instance automatically replicates transactions synchronously to a standby instance in another AZ for instant failover.
-*   **Amazon ElastiCache (Redis):** Provides low-latency session clustering and query caching, boosting web layer speed.
-
-#### 5. IAM & Secrets Management
-*   **AWS Secrets Manager:** Automatically stores, rotates, and manages the database credentials. Secrets are securely mounted directly into Fargate tasks as environment variables at runtime, ensuring no credentials exist in source code.
-*   **AWS KMS (Key Management Service):** Provides envelope encryption for DB storage, Secrets Manager values, and S3 data.
-
----
-
-### 📊 Comparative Analysis
-
-| Feature | Traditional EC2 Architecture (Existing) | Modernized ECS Fargate Architecture (Proposed) |
-| :--- | :--- | :--- |
-| **Operational Overhead** | **High** (Must manage, patch, and scale EC2 OS, JVM, and Nginx configurations). | **Extremely Low** (Serverless containers, zero OS maintenance, AWS patches underlying servers). |
-| **Scaling Velocity** | **Slow** (Spinning up new VM EC2 instances takes 1-3 minutes). | **Rapid** (ECS containers spin up and start serving requests in seconds). |
-| **Secret Management** | **Risky** (Variables stored on disk, in config files, or embedded in code). | **Excellent** (Secrets Manager with IAM policies, credentials injected dynamically). |
-| **Edge Security** | **Basic** (Requires managing firewalls and reverse proxies manually on EC2). | **Premium** (Unified CloudFront, Route53, and AWS WAF blocking L7 attacks at the edge). |
-| **Infrastructure Cost** | **High** (Idle VMs, complex Transit Gateways, multi-VPC overhead). | **Optimized** (Pay-as-you-go container resource allocation, consolidated VPC structure). |
-
----
-
-## 🛠️ Local Development Quick Start
-
-To run and test the Spring Boot application locally:
-
-### 1. Prerequisites
-*   Java Development Kit (JDK) 8
-*   Apache Maven 3.6+
-*   MySQL Server 8.0 / MariaDB
-
-### 2. Database Initialization
-Log into your local MySQL CLI and execute the schema setup:
-```sql
--- 1. Create the Database
-CREATE DATABASE UserDB;
-
--- 2. Use the Database
-USE UserDB;
-
--- 3. Create the Employee Table
-CREATE TABLE Employee (
-  id int unsigned auto_increment not null,
-  first_name varchar(250),
-  last_name varchar(250),
-  email varchar(250),
-  username varchar(250),
-  password varchar(250),
-  regdate timestamp,
-  primary key (id)
-);
+    - name: Extract Tomcat to /opt/tomcat
+      unarchive:
+        src: /tmp/tomcat.tar.gz
+        dest: /opt/tomcat
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+        owner: tomcat
+        group: tomcat
 ```
 
-### 3. Run the Application
-1.  Navigate into the `Java-App` folder:
-    ```bash
-    cd Java-App
-    ```
-2.  Update `src/main/resources/application.properties` with your local database URL and credentials.
-3.  Launch the application using the Maven wrapper:
-    ```bash
-    ./mvnw spring-boot:run
-    ```
-4.  Open your browser and navigate to: `http://localhost:8080/`
+---
+
+### 2. Container Orchestration with Kubernetes (K8s)
+To increase resiliency, scaling velocity, and declarative state enforcement, we pivot application orchestration to a Kubernetes cluster (such as local minikube/K3s or AWS EKS).
+
+#### Deployment & Service Manifest (`k8s/app-deployment.yaml`):
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-app-deployment
+  labels:
+    app: java-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: java-app
+  template:
+    metadata:
+      labels:
+        app: java-app
+    spec:
+      containers:
+        - name: java-app-container
+          image: java-app:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: "mysql-service"
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_NAME
+              value: "UserDB"
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-app-service
+spec:
+  selector:
+    app: java-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+```
 
 ---
 
-## 🚀 AWS Production Deployment Steps
+### 3. Secret Shielding with HashiCorp Vault
+Rather than storing database configurations and encryption keys in static environment variables or git, we integrate **HashiCorp Vault** for centralized secret management, dynamic credential generation, and secure runtime injection.
 
-Follow these steps to deploy the modernized Fargate architecture:
-
-### Step 1: Secure Credentials
-1.  Create an entry in **AWS Secrets Manager** named `prod/dptweb/rds` holding keys `username` and `password`.
-2.  Assign the secret encryption to an **AWS KMS** custom managed key.
-
-### Step 2: Database Provisioning
-1.  Create an **Amazon RDS MySQL** instance inside isolated private subnets across two AZs.
-2.  Enable **Multi-AZ Deployment** and attach the database security group allowing inbound MySQL traffic (port 3306) only from the ECS task security group.
-3.  Inject the initialization schema (found in the local quick start section) using an AWS Client VPN or a temporary bastion instance.
-
-### Step 3: Containerization & Registry Pushing
-1.  Create a `Dockerfile` in the root of `Java-App` to package Tomcat and the WAR file:
-    ```dockerfile
-    FROM tomcat:9.0-jdk8-openjdk-slim
-    RUN rm -rf /usr/local/tomcat/webapps/*
-    COPY target/dptweb-1.0.war /usr/local/tomcat/webapps/ROOT.war
-    EXPOSE 8080
-    CMD ["catalina.sh", "run"]
-    ```
-2.  Build the Maven artifact:
-    ```bash
-    ./mvnw clean package
-    ```
-3.  Log into your **Amazon ECR** registry and push the image:
-    ```bash
-    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <your_aws_account_id>.dkr.ecr.us-east-1.amazonaws.com
-    docker build -t dptweb .
-    docker tag dptweb:latest <your_aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/dptweb:latest
-    docker push <your_aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/dptweb:latest
-    ```
-
-### Step 4: ECS Cluster & Task Setup
-1.  Create an **Amazon ECS Cluster** using the Fargate launch type.
-2.  Create an **ECS Task Definition** that:
-    *   References the image pushed to ECR.
-    *   Uses an **ECS Task Execution Role** with permissions to read from AWS Secrets Manager.
-    *   Retrieves the secret values from AWS Secrets Manager and maps them as environment variables (`DB_USERNAME`, `DB_PASSWORD`) to the container.
-3.  Create an **ECS Service** with the task definition, spanning private subnets, linked behind your **Application Load Balancer**.
-
-### Step 5: CDN & WAF Setup
-1.  Create an **Amazon CloudFront** distribution. Set the Origin to the domain of your Application Load Balancer.
-2.  Create an **AWS WAF Web ACL** with SQLi defense rules and attach it directly to your CloudFront distribution.
-3.  Point your **Amazon Route 53** hosted zone domain to the CloudFront distribution via an Alias record.
+#### Pod Sidecar Secret Injection Pattern:
+We utilize the **Vault Agent Injector** to mount secrets directly into our Kubernetes application pods dynamically as a ramdisk file:
+```yaml
+spec:
+  template:
+    metadata:
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "java-app-role"
+        vault.hashicorp.com/agent-inject-secret-database: "secret/data/mysql"
+        vault.hashicorp.com/agent-inject-template-database: |
+          {{- with secret "secret/data/mysql" -}}
+          export DB_USERNAME="{{ .Data.data.username }}"
+          export DB_PASSWORD="{{ .Data.data.password }}"
+          {{- end -}}
+```
 
 ---
 
-## 🔒 License
-This repository is licensed under the terms of the MIT License. Feel free to copy, modify, and build upon this structure for your own production systems.
+### 4. Telemetry & Monitoring with Prometheus & Grafana
+For comprehensive observability, we configure a Prometheus-Grafana stack to capture JVM system vitals, HTTP latencies, error frequencies, and network metrics.
+
+#### Prometheus Target Configuration (`prometheus.yml`):
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+```
+
+#### Grafana Dashboard Metrics Tracker:
+1. **JVM Garbage Collection Time:** Tracks memory leaks and memory clean frequency.
+2. **Tomcat Active Sessions:** Measures user sessions and thread allocation limits.
+3. **HTTP Request Rate & Response Times:** Tracks transaction latency and standard error codes (e.g. 5xx).
+
+---
+
+### 5. Traffic Analysis & Verification with Wireshark & TShark
+To perform network security validation, troubleshoot connection drops, and ensure internal database requests are securely isolated, we utilize **Wireshark** (or its CLI variant `tshark`).
+
+#### Common Network Inspection Commands:
+* **Capture live MySQL traffic to analyze latency:**
+  ```bash
+  sudo tshark -i eth0 -Y "mysql" -T fields -e mysql.query
+  ```
+* **Verify TLS connection Handshake across endpoints:**
+  ```bash
+  sudo tshark -i eth0 -Y "tls.handshake.type == 1"
+  ```
+* **Locate unencrypted application headers or payload exchanges:**
+  ```bash
+  sudo tcpdump -i eth0 -s 0 -A 'tcp port 8080 and (((ip[2:2] - ((ip[0]&0xf)<<2)) - ((tcp[12]&0xf0)>>2)) != 0)'
+  ```
+
+---
+
+## 🔒 Security Best Practices & License
+This project follows strict security isolation policies. All code modifications undergo Trivy static analysis on every push, and the repository is licensed under the [MIT License](file:///home/the-green/Desktop/Devops%20Project/End-To-End-Deploy-Java-Application-on-AWS-3-Tier-Architecture/LICENSE).
