@@ -15,7 +15,7 @@ To support different operational budgets, scaling requirements, and environment 
 
 Our primary cost-optimized deployment architecture collapses container orchestration onto a single robust EC2 host running **K3s (lightweight Kubernetes)**. By placing the K3s host in a public subnet with native Layer 4 load balancing and routing, we completely eliminate costly Application Load Balancers (ALBs) and NAT Gateways. The database is securely isolated inside a private subnet.
 
-![Cost-Optimized K3s Architecture](./k3s_optimized_architecture.png)
+![Cost-Optimized K3s Architecture](docs/architecture.png)
 
 #### 🌟 Key Architecture Pillars:
 1. **Lightweight Orchestration:** Declarative pod deployment (3 replicas for high availability at the application tier) using a minimal K3s footprint, saving host resource overhead.
